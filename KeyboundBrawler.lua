@@ -1,10 +1,10 @@
 KeyboundBrawler = KeyboundBrawler or {}
-KeyboundBrawler.version="1.0.2"
+KeyboundBrawler.version="1.1.0"
 local addon=KeyboundBrawler
 
 function addon.Initialize()
     -- Reloads keep the global table: release movement and queued keys first.
-    addon.Movement.stop(); addon.Typer.reset(); addon.Loop.reset(); addon.Quest.reset(); addon.Lib.reset()
+    addon.Movement.stop(); addon.Typer.reset(); addon.Loop.reset(); addon.Quest.reset(); addon.Lib.reset(); addon.Coffers.reset()
     if addon.Capture then addon.Capture.reset() end
     addon.Shop.view=nil
     addon.LoadSettings(); addon.UI.init()
@@ -32,7 +32,7 @@ function addon.Update()
     addon.FlushSettings()
     if addon.Lib.refresh() then
         addon.TickNewCharacter()
-        addon.Emotes.tick(); addon.Shop.refreshView(); addon.Loop.tick()
+        addon.Emotes.tick(); addon.Shop.refreshView(); addon.Loop.tick(); addon.Coffers.tick()
         -- Development only, not in module.def: dev\Capture.lua records what
         -- happens in Keybound Square and the duty, dev\Tests.lua runs in-game
         -- scenarios (see dev\README.md).

@@ -12,8 +12,8 @@ local addon=KeyboundBrawler
 -- character's saved file doesn't have: changing one never changes anyone's
 -- saved settings.
 local defaults={
-    maxGames=0,
-    wordDelayMs=1500,
+    maxGames=0, coffersToOpen=0,
+    wordDelayMs=1250, longSentenceDelay=true,
     spendAt=5470, keepReserve=0, coffers=true,
     restMin=4, restMax=10,
     breakEvery=10, breakMin=5, breakMax=15,
@@ -38,6 +38,7 @@ local function sanitize(s)
         if type(s[key])~=type(value) then s[key]=type(value)=="table" and {} or value end
     end
     s.maxGames=clamp(s.maxGames,0,9999)
+    s.coffersToOpen=clamp(s.coffersToOpen,0,999)
     s.wordDelayMs=clamp(s.wordDelayMs,250,5000)
     s.spendAt=clamp(s.spendAt,0,99999)
     s.keepReserve=clamp(s.keepReserve,0,99999)

@@ -88,7 +88,9 @@ local function drawStatus()
     local L=addon.Loop
     if GUI:BeginTable("##kbStatus",2) then
         GUI:TableSetupColumn("",0,1); GUI:TableSetupColumn("",0,5)
-        pair("Status",L.status or "")
+        -- Opening coffers (the loop is stopped meanwhile) shows its own status.
+        local coffers=addon.Coffers.status
+        pair("Status",(coffers and not L.running()) and coffers or L.status or "")
         if L.inventoryFull then GUI:SameLine(); GUI:TextColored(1,0.35,0.35,1,"(Inventory full)") end
         if L.state=="rest" then GUI:SameLine(); if GUI:SmallButton("Skip") then L.skipRest() end end
         pair("Games",L.gamesValue or "0")
@@ -112,6 +114,16 @@ local function limitText(limit)
     return U.limitText
 end
 
+local COFFER_HELP="How many Keybound Coffers to open. Click to type a number, 0 opens every one in your bags."
+local OPEN_HELP="Open Keybound Coffers from your bags: the number in the box, or all of them at 0. Not while the loop runs."
+local OPEN_WIDTH,OPEN_BOX,OPEN_GAP=110,50,8
+
+-- The coffers to open as shown: the number, or All at 0.
+local function cofferText(count)
+    if count~=U.cofferFor then U.cofferFor=count; U.cofferText=count==0 and "All" or tostring(count) end
+    return U.cofferText
+end
+
 -- The next widget on a line whose label alignedText moved down: SameLine
 -- returns to the label's height, so each framed widget goes back to y.
 local function sameRow(y) GUI:SameLine(); GUI:SetCursorPos(GUI:GetCursorPosX(),y) end
@@ -133,17 +145,19 @@ local function coloredButton(label,c,width)
 end
 
 -- Start or Stop, then Games: a box that takes a typed number (Minion's
--- DragInt draws nothing), then - and +.
+-- DragInt draws nothing), then - and +; on the far right, how many coffers
+-- to open and Open Coffers.
 local function drawControls()
     local s,L=addon.settings,addon.Loop
-    local _,y=GUI:GetCursorPos()
+    local startX,y=GUI:GetCursorPos()
+    local rowWidth=GUI:GetContentRegionAvail()
     if L.running() then
         if coloredButton("Stop",STOP_COLOR,90) then L.stop() end
     elseif coloredButton("Start",START_COLOR,90) then
         L.start()
     end
     GUI:SameLine()
-    alignedText("Games")
+    alignedText("Games:")
     sameRow(y)
     GUI:PushItemWidth(70)
     local typed,changed=GUI:InputText("##kbLimit",limitText(s.maxGames),U.limitFlags)
@@ -155,6 +169,22 @@ local function drawControls()
     if GUI:Button("-##kbLimitDown",0,0) and s.maxGames>0 then s.maxGames=s.maxGames-1; addon.SettingsChanged() end
     sameRow(y)
     if GUI:Button("+##kbLimitUp",0,0) and s.maxGames<9999 then s.maxGames=s.maxGames+1; addon.SettingsChanged() end
+    sameRow(y)
+    GUI:SetCursorPos(math.max(GUI:GetCursorPosX(),startX+rowWidth-OPEN_BOX-OPEN_GAP-OPEN_WIDTH),y)
+    GUI:PushItemWidth(OPEN_BOX)
+    local count,countChanged=GUI:InputText("##kbCoffers",cofferText(s.coffersToOpen),U.limitFlags)
+    GUI:PopItemWidth()
+    tip(COFFER_HELP)
+    local n=countChanged and tonumber(count)
+    if n then s.coffersToOpen=math.max(0,math.min(999,math.floor(n))); addon.SettingsChanged() end
+    sameRow(y)
+    local C=addon.Coffers
+    if C.active then
+        if coloredButton("Stop opening",STOP_COLOR,OPEN_WIDTH) then C.stop() end
+    elseif GUI:Button("Open Coffers",OPEN_WIDTH,0) then
+        C.start(s.coffersToOpen)
+    end
+    tip(OPEN_HELP)
 end
 
 -- Drag and drop, tracked by hand (Minion's GUI has no ImGui drag-and-drop
@@ -288,6 +318,9 @@ local function drawSettings()
     slider("Keep","keepReserve",0,cap,"%d MGC","MGC that is never spent, kept back as a reserve.")
     GUI:TextDisabled("Typing")
     slider("Word delay","wordDelayMs",250,5000,"%d ms","Time between words, give or take 20% at random (in the duty, while the text box takes input).")
+    local longer,longerChanged=GUI:Checkbox("Increase timer for longer sentences",s.longSentenceDelay)
+    if longerChanged then s.longSentenceDelay=longer; addon.SettingsChanged() end
+    tip("Wait twice the word delay, up to 5000 ms, before a long sentence (28 characters or more), such as the green ones by the party.")
     GUI:TextDisabled("Rest between games")
     range("Rest after each game","restMin","restMax",0,600,"%d s",
         "After every game, wait a random time between these two values before queuing again, so games don't start back to back.")

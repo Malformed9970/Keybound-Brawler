@@ -1,6 +1,6 @@
 [Module]
 Name=KeyboundBrawler
 Version=1
-Files=Lib.lua,Settings.lua,Debug.lua,Dialogs.lua,Movement.lua,Typer.lua,Shop.lua,Emotes.lua,Quest.lua,Loop.lua,UI.lua,KeyboundBrawler.lua
+Files=Lib.lua,Settings.lua,Debug.lua,Dialogs.lua,Movement.lua,Typer.lua,Shop.lua,Emotes.lua,Quest.lua,Loop.lua,Coffers.lua,UI.lua,KeyboundBrawler.lua
 Dependencies=minionlib,FFXIVLib,FFXIVMINION
 Enabled=1

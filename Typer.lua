@@ -12,27 +12,38 @@ local T=addon.Typer
 -- during Letterlock). An enemy finishing a Letterlock cast (Cursed Gaze,
 -- Sensory Jammer) makes the game punish typing: words are held from guardMs
 -- before such a cast ends until guardMs after.
--- Between words it waits the Word delay setting, give or take jitter at
--- random, and one delay after Letterlock, when the text box opens, and when
--- a word shows up after there was none (not at once: 2026-10-28). A word
--- isn't sent twice within recentFor ms.
+-- Before each word it waits the Word delay setting, give or take jitter at
+-- random, counted from the last word, or from when the text box opened, a
+-- Letterlock ended, or a word showed up after there was none (not at once:
+-- 2026-10-28). With the Increase timer for longer sentences setting, a long
+-- sentence waits twice that, up to longMaxMs: the green ones by the party
+-- run 31 to 39 characters, ordinary words and phrases up to about 24
+-- (2026-10-28 captures). A word isn't sent twice within
+-- recentFor ms.
 -- (Until v0.9.0 an outside OCR helper did this: see dev\archive\0.9.0-ocr.)
 
 T.checkEvery,T.jitter,T.recentFor,T.guardMs,T.bigHp=100,0.2,3000,500,1000
+T.longWord,T.longMaxMs=28,5000
 T.letterlockCasts={[49529]=true,[49532]=true,[49702]=true}
 
 function T.reset()
-    T.nextAt=nil; T.checkAt=0; T.holdUntil=nil; T.hits=0; T.misses=0; T.lastError=nil
+    T.waitFrom=nil; T.checkAt=0; T.holdUntil=nil; T.hits=0; T.misses=0; T.lastError=nil
     T.recent=T.recent or {}
     for text in pairs(T.recent) do T.recent[text]=nil end
     T.status="Idle"
 end
 
--- The time to the next word: the Word delay, give or take jitter.
-function T.delay()
-    local base=addon.settings.wordDelayMs
-    return base+(math.random()*2-1)*T.jitter*base
+-- The wait before text (ms): the Word delay, give or take jitter (roll,
+-- -1 to 1, drawn once per wait); twice that for a long sentence when the
+-- setting is on, up to longMaxMs.
+function T.delay(text,roll)
+    local s=addon.settings
+    local wait=s.wordDelayMs*(1+(roll or 0)*T.jitter)
+    if s.longSentenceDelay and text and #text>=T.longWord then wait=math.min(2*wait,T.longMaxMs) end
+    return wait
 end
+
+local function startWait(now) T.waitFrom=now; T.roll=math.random()*2-1 end
 
 -- The duty's text box: its control when open (nil otherwise), and whether
 -- it takes input.
@@ -103,13 +114,13 @@ function T.tick()
     T.checkAt=now+T.checkEvery
     local control,enabled
     if addon.Loop.running() then control,enabled=inputState() end
-    if not control then T.nextAt=nil; T.status="Idle"; return end
-    if not enabled then T.nextAt=nil; T.status="Letterlock: holding"; return end
+    if not control then T.waitFrom=nil; T.status="Idle"; return end
+    if not enabled then T.waitFrom=nil; T.status="Letterlock: holding"; return end
     if not canSubmit(control) then T.status="This Minion build can't submit words (update Minion)"; return end
     local text=T.pick(control:GetData(),now)
-    if not text then T.nextAt=nil; T.status="No word to type"; return end
-    if not T.nextAt then T.nextAt=now+T.delay() end
-    if now<T.nextAt then return end
+    if not text then T.waitFrom=nil; T.status="No word to type"; return end
+    if not T.waitFrom then startWait(now) end
+    if now<T.waitFrom+T.delay(text,T.roll) then return end
     if T.holdUntil and now<T.holdUntil then T.status="Holding for a Letterlock cast"; return end
     local left=letterlockCastLeft()
     if left and left<=T.guardMs then
@@ -117,7 +128,7 @@ function T.tick()
         T.status="Holding for a Letterlock cast"
         return
     end
-    T.nextAt=now+T.delay()
+    startWait(now)
     T.recent[text]=now+T.recentFor
     local ok,hit=pcall(control.Action,control,"SubmitWord",text)
     if not ok then
