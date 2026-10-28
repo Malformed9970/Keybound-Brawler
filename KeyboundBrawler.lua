@@ -1,5 +1,5 @@
 KeyboundBrawler = KeyboundBrawler or {}
-KeyboundBrawler.version="0.9.0"
+KeyboundBrawler.version="1.0.0"
 local addon=KeyboundBrawler
 
 function addon.Initialize()
@@ -22,11 +22,8 @@ function addon.loading()
 end
 
 function addon.Update()
-    -- The OCR helper hears Stop at once and keeps its lease through loading
-    -- screens.
-    addon.Typer.lease()
     if GetGameState()~=FFXIV.GAMESTATE.INGAME or addon.loading() then return end
-    -- Typing keeps its own pace, so it runs on every update.
+    -- Firing words keeps its own pace, so it's checked on every update.
     if addon.Lib.ready() then addon.Typer.tick() end
     if TimeSince(addon.lastPulse or 0)<100 then return end
     addon.lastPulse=Now()
@@ -34,6 +31,7 @@ function addon.Update()
     if addon.RefreshOwner() then addon.Loop.stop() end
     addon.FlushSettings()
     if addon.Lib.refresh() then
+        addon.TickNewCharacter()
         addon.Emotes.tick(); addon.Shop.refreshView(); addon.Loop.tick()
         -- Development only, not in module.def: dev\Capture.lua records what
         -- happens in Keybound Square and the duty, dev\Tests.lua runs in-game

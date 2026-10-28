@@ -6,12 +6,16 @@ local addon=KeyboundBrawler
 -- tostring(itemId): wants[key]=1 for a ticked item, bought counts what this
 -- addon has bought. emotes[tostring(emoteId)]=true for the shop's emotes the
 -- Emote window has shown as learned. Rests are random within their ranges.
--- Shop at defaults to 5470 MGC, the price of all 19 unique offers.
+-- Shop at defaults to 5470 MGC, the price of all 19 unique offers; spending
+-- what's left on coffers is on, and a new character starts with every
+-- unique offer ticked (addon.TickNewCharacter). Defaults only fill in what a
+-- character's saved file doesn't have: changing one never changes anyone's
+-- saved settings.
 local defaults={
     maxGames=0,
-    charsPerSecond=8, submitDelayMs=300,
-    spendAt=5470, keepReserve=0, coffers=false,
-    restMin=20, restMax=90,
+    wordDelayMs=1500,
+    spendAt=5470, keepReserve=0, coffers=true,
+    restMin=4, restMax=10,
     breakEvery=10, breakMin=5, breakMax=15,
     consoleLog=false, hideOwned=false,
     order={}, wants={}, bought={}, emotes={},
@@ -20,9 +24,12 @@ local defaults={
 local function clamp(value,minimum,maximum) return math.max(minimum,math.min(maximum,math.floor(value))) end
 
 local function sanitize(s)
-    -- Settings from 0.3: switches are gone, "Spend the rest on coffers" carries over.
-    if s.buyCoffers=="Enabled" then s.coffers=true end
+    -- Settings from 0.3: switches are gone, "Spend the rest on coffers" carries over,
+    -- either way (the default is on now).
+    if s.buyCoffers~=nil and s.coffers==nil then s.coffers=s.buyCoffers=="Enabled" end
     for _,key in ipairs({"farmLoop","autoTyper","autoBuy","buyCoffers","debugLog"}) do s[key]=nil end
+    -- Settings from the OCR typer (up to 0.9.0): replaced by the word delay.
+    s.charsPerSecond=nil; s.submitDelayMs=nil
     -- Settings from before 0.8.3: Shop at defaulted to 9000, so a saved 9000
     -- is that default and moves to the new one, once.
     if s.settingsVersion==nil and s.spendAt==9000 then s.spendAt=defaults.spendAt end
@@ -31,8 +38,7 @@ local function sanitize(s)
         if type(s[key])~=type(value) then s[key]=type(value)=="table" and {} or value end
     end
     s.maxGames=clamp(s.maxGames,0,9999)
-    s.charsPerSecond=clamp(s.charsPerSecond,1,50)
-    s.submitDelayMs=clamp(s.submitDelayMs,100,2000)
+    s.wordDelayMs=clamp(s.wordDelayMs,250,5000)
     s.spendAt=clamp(s.spendAt,0,99999)
     s.keepReserve=clamp(s.keepReserve,0,99999)
     s.restMin=clamp(s.restMin,0,600); s.restMax=clamp(s.restMax,0,600)
@@ -85,10 +91,25 @@ function addon.LoadSettings()
             if loaded then loaded.bought={} end
         end
     end
+    -- A character with no saved settings at all (not even the old shared
+    -- file) is new: its offers get ticked once FFXIVLib has loaded them.
+    addon.settingsNew=addon.paths.settings~=nil and loaded==nil
     addon.settings=loaded or {}
     sanitize(addon.settings)
     addon.settingsChangedAt=nil
     addon.Shop.dirty=true; addon.Shop.ownedAt=nil
+end
+
+-- A new character starts with every unique offer ticked. The offers come
+-- from FFXIVLib, which loads after the settings, so this runs once its data
+-- is ready, and is saved like any edit.
+function addon.TickNewCharacter()
+    if not addon.settingsNew then return end
+    addon.settingsNew=false
+    for _,e in ipairs(addon.Lib.data.shop.items) do
+        if not e.repeatable then addon.settings.wants[e.key]=1 end
+    end
+    addon.SettingsChanged()
 end
 
 -- Checked each pulse: loads the other file when a character logs in or the

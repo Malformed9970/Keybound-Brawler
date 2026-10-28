@@ -92,7 +92,6 @@ local function drawStatus()
         if L.inventoryFull then GUI:SameLine(); GUI:TextColored(1,0.35,0.35,1,"(Inventory full)") end
         if L.state=="rest" then GUI:SameLine(); if GUI:SmallButton("Skip") then L.skipRest() end end
         pair("Games",L.gamesValue or "0")
-        pair("OCR helper",addon.Typer.helperText())
         GUI:EndTable()
     end
     local view=addon.Shop.view
@@ -288,8 +287,7 @@ local function drawSettings()
     slider("Shop at","spendAt",0,cap,"%d MGC","Visit the MGC trader once you have at least this much MGC.")
     slider("Keep","keepReserve",0,cap,"%d MGC","MGC that is never spent, kept back as a reserve.")
     GUI:TextDisabled("Typing")
-    slider("Typing speed","charsPerSecond",1,50,"%d keys/s","How fast words are typed, in key presses per second.")
-    slider("Pause after Enter","submitDelayMs",100,2000,"%d ms","How long to wait after submitting a word before typing the next one, so the enemy's word can refresh.")
+    slider("Word delay","wordDelayMs",250,5000,"%d ms","Time between words, give or take 20% at random (in the duty, while the text box takes input).")
     GUI:TextDisabled("Rest between games")
     range("Rest after each game","restMin","restMax",0,600,"%d s",
         "After every game, wait a random time between these two values before queuing again, so games don't start back to back.")
@@ -310,20 +308,11 @@ local function drawLog()
     GUI:TreePop()
 end
 
--- Where this window is (window pixels), while it shows: the OCR helper
--- doesn't read there (the shop list holds known words such as "avalanche").
-U.rect=U.rect or {}
-
 function U.draw()
-    local rect=U.rect
-    rect.set=false
     if not U.open then return end
     GUI:SetNextWindowSize(520,640,GUI.SetCond_FirstUseEver)
     U.visible,U.open=GUI:Begin("Keybound Brawler##KeyboundBrawler",U.open)
     if U.visible then
-        local x,y=GUI:GetWindowPos()
-        local width,height=GUI:GetWindowSize()
-        if x and width then rect[1],rect[2],rect[3],rect[4],rect.set=x,y,x+width,y+height,true end
         if not U.padY then measure() end
         if not (addon.Lib.ready() and addon.Shop.view) then
             local missing=addon.Lib.missingText or ""
