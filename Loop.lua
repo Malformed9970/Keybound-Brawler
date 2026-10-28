@@ -277,9 +277,80 @@ function H.shop()
     set("register","Walking to the registrar")
 end
 
+-- The game's no-keyboard warning (its text from Lib): on some setups a
+-- Yes/No over the duty-ready window, and Yes enters the duty. It's found by
+-- its text among every open Yes/No (the game keeps more than one), so in
+-- any client language, comparing letters and digits only: the window's copy
+-- carries line breaks and colour codes. Looked for every warningEvery ms
+-- while waiting to play.
+L.warningEvery=300
+local NO_KEYBOARD="No-keyboard warning: answering Yes"
+
+local function letters(text) return (tostring(text):gsub("[%z\1-\47\58-\64\91-\96\123-\127]",""):lower()) end
+
+local warningText,warningLetters
+-- Whether control shows the warning, in any of its strings.
+local function showsWarning(control)
+    local text=addon.Lib.data.keyboardWarning
+    if text~=warningText then warningText=text; warningLetters=text and letters(text) end
+    if not warningLetters or warningLetters=="" then return false end
+    for _,value in pairs(control:GetStrings() or {}) do
+        if letters(value):find(warningLetters,1,true) then return true end
+    end
+    for _,data in pairs(control:GetRawData() or {}) do
+        if type(data.value)=="string" and letters(data.value):find(warningLetters,1,true) then return true end
+    end
+    return false
+end
+
+-- Yes on the warning while it's open; true while it is.
+local function answerWarning()
+    local now=Now()
+    if now<(L.warningCheckAt or 0) then return L.warningOpen end
+    L.warningCheckAt=now+L.warningEvery
+    L.warningOpen=false
+    for _,control in pairs(GetControls() or {}) do
+        if control.name=="SelectYesno" and control:IsOpen() and showsWarning(control) then L.warningOpen=true; break end
+    end
+    if L.warningOpen then
+        if L.status~=NO_KEYBOARD then addon.Debug.log(NO_KEYBOARD) end
+        L.status=NO_KEYBOARD
+        UseControlAction("SelectYesno","Yes")
+    end
+    return L.warningOpen
+end
+
+-- 3 s into a pop with the duty-ready window still up, the open windows go
+-- to the log once (HUD parts aside), marking any that shows the warning: if
+-- it goes unanswered on someone's setup, that shows where it was.
+local function logPop()
+    if not IsControlOpen("ContentsFinderConfirm") then L.popAt=nil; L.popLogged=nil; return end
+    L.popAt=L.popAt or Now()
+    if L.popLogged or TimeSince(L.popAt)<3000 then return end
+    L.popLogged=true
+    local names={}
+    for _,control in pairs(GetControls() or {}) do
+        local name=tostring(control.name)
+        if name:sub(1,1)~="_" and control:IsOpen() then
+            names[#names+1]=showsWarning(control) and (name.." (shows the no-keyboard warning)") or name
+        end
+    end
+    table.sort(names)
+    addon.Debug.log("Duty ready for 3 s; open windows: "..table.concat(names,", "))
+end
+
+-- The duty pop: the warning first, if it's up, else Commence, then status.
+local function acceptDuty(status)
+    logPop()
+    if answerWarning() or not IsControlOpen("ContentsFinderConfirm") then return end
+    UseControlAction("ContentsFinderConfirm","Confirm")
+    L.status=status
+end
+
 function H.register()
     local d=addon.Lib.data
     if addon.currentMap()==d.dutyMap then return set("duty") end
+    if answerWarning() then return end
     if eventStopped() then return end
     if not L.queues() then return set("member","Waiting for the party leader to queue") end
     -- Already open (opened by hand, or still up from before Start): register.
@@ -301,22 +372,6 @@ function H.register()
         L.tries=L.tries+1; L.step=nil
         if L.tries>=2 then pause("The registration window did not open") end
     end
-end
-
--- The duty-ready window: Commence, then status. When the game finds no
--- usable keyboard it first asks over that window whether to play anyway (a
--- Yes/No, Addon text 17826): Yes, which enters the duty.
-local NO_KEYBOARD="No-keyboard warning: answering Yes"
-local function acceptDuty(status)
-    if not IsControlOpen("ContentsFinderConfirm") then return end
-    if IsControlOpen("SelectYesno") then
-        if L.status~=NO_KEYBOARD then addon.Debug.log(NO_KEYBOARD) end
-        L.status=NO_KEYBOARD
-        UseControlAction("SelectYesno","Yes")
-        return
-    end
-    UseControlAction("ContentsFinderConfirm","Confirm")
-    L.status=status
 end
 
 -- A party member: the leader registers the party; this waits and accepts

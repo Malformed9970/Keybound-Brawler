@@ -3,9 +3,10 @@ local addon=KeyboundBrawler
 addon.Lib=addon.Lib or {}
 local L=addon.Lib
 
--- The one fixed ID: Keybound Brawler's ContentFinderCondition row. Everything
--- else is derived from it through FFXIVLib (sheet rows via FFXIVLib.Cache SQL,
--- plus its NPC/shop/map/quest APIs):
+-- Fixed IDs: Keybound Brawler's ContentFinderCondition row, and the Addon text
+-- row of the game's no-keyboard warning (no sheet links to it). Everything
+-- else is derived from the duty row through FFXIVLib (sheet rows via
+-- FFXIVLib.Cache SQL, plus its NPC/shop/map/quest APIs):
 --   duty row -> territory and unlock quest
 --   quest row -> event (Festival), prerequisite, level, giver and the ToDo
 --                Level rows (who or where each step happens)
@@ -16,6 +17,7 @@ local L=addon.Lib
 -- FFXIVLib lookups are async (nil until loaded), so refresh() runs every pulse
 -- until ready().
 L.cfc=1095
+L.keyboardWarningRow=17826
 
 function L.available() return FFXIVLib~=nil and FFXIVLib.API~=nil and FFXIVLib.Cache~=nil end
 
@@ -231,6 +233,15 @@ local function loadEnemies(d)
     d.enemies=enemies
 end
 
+-- The game's no-keyboard warning, as text (addon.Loop answers it).
+local function loadKeyboardWarning(d)
+    local rows=query("kb-keyboard-v1:"..L.keyboardWarningRow,"SELECT RowId, Text FROM Addon WHERE RowId = "..L.keyboardWarningRow)
+    local row=rows and rows[1]
+    if not row then return end
+    local text=FFXIVLib.Cache.Text(row.Text)
+    if text and text~="" then d.keyboardWarning=text end
+end
+
 -- Advances every pending lookup; call it until it returns true.
 function L.refresh()
     if L.isReady then return true end
@@ -269,6 +280,7 @@ function L.refresh()
     end
     if not d.words then loadWords(d) end
     if not d.enemies then loadEnemies(d) end
+    if not d.keyboardWarning then loadKeyboardWarning(d) end
     local missing=L.missing()
     L.isReady=#missing==0
     -- The window's loading line, built here so drawing doesn't.
@@ -294,5 +306,6 @@ function L.missing()
         if not d[key] then out[#out+1]=key end
     end
     if d.shop and not d.shop.unlocksLoaded then out[#out+1]="unlocks" end
+    if not d.keyboardWarning then out[#out+1]="keyboard warning" end
     return out
 end
