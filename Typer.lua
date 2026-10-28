@@ -5,17 +5,20 @@ local T=addon.Typer
 
 -- Types in the duty: a casting enemy's word first, then the word on the
 -- enemy nearest you (a bigger enemy when two are as near), only for an
--- enemy that is alive and targetable. Only while the loop runs (Stop halts
+-- enemy that is alive and targetable. A big enemy's cast doesn't count: the
+-- airbuster casts through all of wave 3, which kept its words ahead of the
+-- green one by the party (2026-10-28). Only while the loop runs (Stop halts
 -- it at once) and the duty's text box takes input (KTGInput r3 is false
 -- during Letterlock). An enemy finishing a Letterlock cast (Cursed Gaze,
 -- Sensory Jammer) makes the game punish typing: words are held from guardMs
 -- before such a cast ends until guardMs after.
 -- Between words it waits the Word delay setting, give or take jitter at
--- random, and one delay after Letterlock or when the text box opens. A word
+-- random, and one delay after Letterlock, when the text box opens, and when
+-- a word shows up after there was none (not at once: 2026-10-28). A word
 -- isn't sent twice within recentFor ms.
 -- (Until v0.9.0 an outside OCR helper did this: see dev\archive\0.9.0-ocr.)
 
-T.checkEvery,T.jitter,T.recentFor,T.guardMs=100,0.2,3000,500
+T.checkEvery,T.jitter,T.recentFor,T.guardMs,T.bigHp=100,0.2,3000,500,1000
 T.letterlockCasts={[49529]=true,[49532]=true,[49702]=true}
 
 function T.reset()
@@ -65,9 +68,9 @@ function T.pick(words,now)
             local e=EntityList:Get(w.id)
             local hp=e and e.hp
             if e and e.targetable and type(hp)=="table" and (hp.current or 0)>0 then
-                local isCasting=casting(e)
-                local distance=math.distance2d(me,e.pos)
                 local max=hp.max or 0
+                local isCasting=max<T.bigHp and casting(e)
+                local distance=math.distance2d(me,e.pos)
                 local better
                 if not best then better=true
                 elseif isCasting~=bestCasting then better=isCasting
@@ -103,6 +106,8 @@ function T.tick()
     if not control then T.nextAt=nil; T.status="Idle"; return end
     if not enabled then T.nextAt=nil; T.status="Letterlock: holding"; return end
     if not canSubmit(control) then T.status="This Minion build can't submit words (update Minion)"; return end
+    local text=T.pick(control:GetData(),now)
+    if not text then T.nextAt=nil; T.status="No word to type"; return end
     if not T.nextAt then T.nextAt=now+T.delay() end
     if now<T.nextAt then return end
     if T.holdUntil and now<T.holdUntil then T.status="Holding for a Letterlock cast"; return end
@@ -112,8 +117,6 @@ function T.tick()
         T.status="Holding for a Letterlock cast"
         return
     end
-    local text=T.pick(control:GetData(),now)
-    if not text then T.status="No word to type"; return end
     T.nextAt=now+T.delay()
     T.recent[text]=now+T.recentFor
     local ok,hit=pcall(control.Action,control,"SubmitWord",text)
