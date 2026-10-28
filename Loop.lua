@@ -303,6 +303,22 @@ function H.register()
     end
 end
 
+-- The duty-ready window: Commence, then status. When the game finds no
+-- usable keyboard it first asks over that window whether to play anyway (a
+-- Yes/No, Addon text 17826): Yes, which enters the duty.
+local NO_KEYBOARD="No-keyboard warning: answering Yes"
+local function acceptDuty(status)
+    if not IsControlOpen("ContentsFinderConfirm") then return end
+    if IsControlOpen("SelectYesno") then
+        if L.status~=NO_KEYBOARD then addon.Debug.log(NO_KEYBOARD) end
+        L.status=NO_KEYBOARD
+        UseControlAction("SelectYesno","Yes")
+        return
+    end
+    UseControlAction("ContentsFinderConfirm","Confirm")
+    L.status=status
+end
+
 -- A party member: the leader registers the party; this waits and accepts
 -- the duty when it pops. Back to registering itself if it becomes the
 -- leader or leaves the party.
@@ -310,17 +326,14 @@ function H.member()
     if addon.currentMap()==addon.Lib.data.dutyMap then return set("duty","In Keybound Brawler") end
     if eventStopped() then return end
     if L.queues() then return set("route") end
-    if IsControlOpen("ContentsFinderConfirm") then
-        UseControlAction("ContentsFinderConfirm","Confirm")
-        L.status="Accepting the duty"
-    end
+    acceptDuty("Accepting the duty")
 end
 
 -- Duty:GetQueueStatus(): 0 not queued, 1 queued, 2 confirming, 3 readying,
 -- 4 in the duty (ffxivminion's NotQueued/InQueue).
 function H.queued()
     if addon.currentMap()==addon.Lib.data.dutyMap then return set("duty","In Keybound Brawler") end
-    if IsControlOpen("ContentsFinderConfirm") then UseControlAction("ContentsFinderConfirm","Confirm") end
+    acceptDuty("Waiting for the duty")
     -- Registered but not in the queue for 10 s (registration didn't take, or
     -- the queue was dropped): register again, twice at most.
     if Duty:GetQueueStatus()==0 then
