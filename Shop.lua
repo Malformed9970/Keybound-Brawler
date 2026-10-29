@@ -118,6 +118,17 @@ function S.plan(mgc,settings,slots)
     return out,pending
 end
 
+-- Whether there's anything to buy at all, whatever MGC you hold: coffers
+-- are on, or a ticked offer isn't owned yet.
+function S.anythingToBuy(settings)
+    if settings.coffers and S.repeatable() then return true end
+    S.checkOwned()
+    for _,e in ipairs(addon.Lib.data.shop.items) do
+        if not e.repeatable and settings.wants[e.key]==1 and not S.owned[e.item] then return true end
+    end
+    return false
+end
+
 -- Time to visit the trader: MGC has reached the threshold and something
 -- planned fits in the inventory.
 function S.due()

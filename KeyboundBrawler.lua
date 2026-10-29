@@ -1,5 +1,5 @@
 KeyboundBrawler = KeyboundBrawler or {}
-KeyboundBrawler.version="1.1.2"
+KeyboundBrawler.version="1.1.3"
 local addon=KeyboundBrawler
 
 function addon.Initialize()

@@ -54,15 +54,27 @@ function L.running() return L.state~="off" and L.state~="paused" end
 
 -- Whether this character queues: solo, or the party's leader. A member
 -- leaves that to the leader and accepts the duty when it pops. Minion's
--- party list marks the leader (isleader, as ffxivminion reads it); a
--- member in another zone may have no entity id, so the name counts too.
-function L.queues()
-    local party=EntityList.myparty
-    if type(party)~="table" then return true end
+-- party lists mark the leader (isleader, as ffxivminion reads it): the
+-- usual one, and the cross-world party's, which the usual one leaves out
+-- (empty outside a duty, 2026-10-29). A member in another zone may have no
+-- entity id, so the name counts too.
+local function leaderIn(party)
+    if type(party)~="table" then return nil end
     for _,member in pairs(party) do
         if member.isleader then return member.id==Player.id or member.name==Player.name end
     end
-    return true
+end
+
+function L.queues()
+    local leader=leaderIn(EntityList.myparty)
+    if leader==nil then leader=leaderIn(EntityList.crossworldparty) end
+    return leader~=false
+end
+
+-- A member goes to Keybound Square only to shop: the leader queues the
+-- party from anywhere, and the pop reaches the member wherever it is.
+local function memberStaysPut()
+    return addon.currentMap()~=addon.Lib.data.squareMap and not addon.Shop.anythingToBuy(addon.settings)
 end
 
 -- Rest after each game: a short random rest, and every breakEvery games
@@ -199,6 +211,7 @@ function H.route()
         if not L.queues() then return set("member","Waiting for the party leader to queue") end
         return set("register","Walking to the registrar")
     end
+    if not L.queues() and memberStaysPut() then return set("member","Waiting for the party leader to queue") end
     travel(d.squareMap)
 end
 
@@ -375,12 +388,14 @@ function H.register()
 end
 
 -- A party member: the leader registers the party; this waits and accepts
--- the duty when it pops. Back to registering itself if it becomes the
--- leader or leaves the party.
+-- the duty when it pops, in Keybound Square or, with nothing to buy,
+-- wherever it is. Back to registering itself if it becomes the leader or
+-- leaves the party, and to the square if something is ticked to buy.
 function H.member()
     if addon.currentMap()==addon.Lib.data.dutyMap then return set("duty","In Keybound Brawler") end
     if eventStopped() then return end
     if L.queues() then return set("route") end
+    if addon.currentMap()~=addon.Lib.data.squareMap and addon.Shop.anythingToBuy(addon.settings) then return set("route") end
     acceptDuty("Accepting the duty")
 end
 
